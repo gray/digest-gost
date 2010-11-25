@@ -1,0 +1,25 @@
+Changes
+ex/benchmark.pl
+GOST.xs
+lib/Digest/GOST.pm
+Makefile.PL
+MANIFEST			This list of files
+ppport.h
+README
+src/byte_order.c
+src/byte_order.h
+src/gost.c
+src/gost.h
+t/00_load.t
+t/01_new.t
+t/gost.t
+typemap
+xt/kwalitee.t
+xt/leaktrace.t
+xt/perlcritic.t
+xt/perlcriticrc
+xt/pod.t
+xt/pod_coverage.t
+xt/portability_filenames.t
+xt/valgrind.t
+xt/vars.t
