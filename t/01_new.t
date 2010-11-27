@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 4;
+use Test::More tests => 5;
 use Digest::GOST;
 
 new_ok('Digest::GOST', [], "new");
@@ -11,8 +11,14 @@ can_ok('Digest::GOST',
 
 my $d1 = Digest::GOST->new();
 $d1->add('foo bar')->reset;
-is($d1->hexdigest, Digest::GOST->new()->hexdigest, 'reset');
+is($d1->hexdigest, Digest::GOST->new()->hexdigest, 'explicit reset');
+
+is(
+    eval { $d1->reset->add('a')->digest; $d1->add('a')->hexdigest },
+    $d1->reset->add('a')->hexdigest,
+    'implicit reset'
+);
 
 $d1->add('foobar');
 my $d2 = $d1->clone;
-is($d1->hexdigest, $d2->hexdigest, "clone");
+is($d1->hexdigest, $d2->hexdigest, 'clone');

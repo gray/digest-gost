@@ -81,6 +81,7 @@ PREINIT:
     unsigned char result[32];
 CODE:
     gost_final(self, result);
+    gost_init(self);
     RETVAL = newSVpv(result, 32);
 OUTPUT:
     RETVAL
