@@ -18,7 +18,6 @@ DEPENDENCIES
 This module requires these other modules and libraries:
 
     Digest
-    MIME::Base64
     Test::More
     parent
 
