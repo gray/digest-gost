@@ -20,14 +20,6 @@ eval {
 
 our @EXPORT_OK = qw(gost gost_hex gost_base64);
 
-# TODO: convert to C.
-sub gost_hex  { unpack 'H*', gost(@_) }
-sub gost_base64 {
-    my $b64 = MIME::Base64::encode(gost(@_), '');
-    $b64 =~ s/=+$//g;
-    return $b64;
-}
-
 
 1;
 
