@@ -141,12 +141,14 @@ static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
 
   // edi=r, esi=l, edx=sbox ;
   __asm __volatile(
+    "pushl %%ebx\n\t" // ebx is used for PIC on OpenBSD
     GOST_ENCRYPT_GCC_ASM_X86() // optimized for x86 Intel Core 2
+    "popl %%ebx\n\t"
     : "=S" (s[i]), "=D" (s[i+1]) // 0,1: s[i]=esi, s[i+1]=edi
     : "d" (sbox), "D" (ctx->hash[i]), "S" (ctx->hash[i+1]), // 2,3,4: edx=sbox,edi=r,esi=l
       "m" (key[0]), "m" (key[1]), "m" (key[2]), "m" (key[3]), // 5, 6, 7, 8
       "m" (key[4]), "m" (key[5]), "m" (key[6]), "m" (key[7])  // 9,10,11,12
-    : "cc", "eax", "ebx", "ecx"
+    : "cc", "eax", "ecx"
   );
 #endif
 
