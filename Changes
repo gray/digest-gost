@@ -1,5 +1,8 @@
 Revision history for Digest-GOST
 
+0.04  Tue Nov 30 11:07:29 UTC 2010
+    - Added missing header files for Windows.
+
 0.03  Mon Nov 29 11:50:42 UTC 2010
     - Asm fix for BSDs. (Aleksey Kravchenko)
 
