@@ -10,6 +10,9 @@ src/byte_order.c
 src/byte_order.h
 src/gost.c
 src/gost.h
+src/platform-dependent.h
+src/stdint.h
+src/unistd.h
 t/00_load.t
 t/01_new.t
 t/gost.t
