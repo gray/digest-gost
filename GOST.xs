@@ -8,7 +8,7 @@
 #include "src/gost.c"
 
 static int
-hex_encode (char *dest, const char unsigned *src, int len) {
+hex_encode (char *dest, const unsigned char *src, int len) {
     static const char hex[] = "0123456789abcdef";
     char *p = dest;
     const unsigned char *s = src;
@@ -20,7 +20,7 @@ hex_encode (char *dest, const char unsigned *src, int len) {
 }
 
 static int
-base64_encode (char *dest, const char unsigned *src, int len) {
+base64_encode (char *dest, const unsigned char *src, int len) {
     static const char b64[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     char *p = dest;
