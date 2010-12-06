@@ -37,7 +37,7 @@
 #endif /* UNDER_CE */
 
 /* check the file state for being a directory */
-#define S_ISDIR(state) ( ((state) & 0xF000) == 0x4000 )
+/* #define S_ISDIR(state) ( ((state) & 0xF000) == 0x4000 ) */
 
 #endif /* _MSC_VER > 1000 */
 
