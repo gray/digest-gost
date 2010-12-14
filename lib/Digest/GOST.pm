@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use parent qw(Exporter Digest::base);
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 $VERSION = eval $VERSION;
 
 eval {
