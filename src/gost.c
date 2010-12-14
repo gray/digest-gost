@@ -39,12 +39,19 @@ void gost_cryptopro_init(gost_ctx *ctx)
   ctx->cryptpro = 1;
 }
 
+#if defined(__GNUC__) && defined(CPU_IA32) && !defined(RHASH_NO_ASM)
+# define USE_GCC_ASM_IA32
+#elif defined(__GNUC__) && defined(CPU_X64) && !defined(RHASH_NO_ASM)
+# define USE_GCC_ASM_X64
+#endif
+
 /*
  *  A macro that performs a full encryption round of GOST 28147-89.
  *  Temporary variables tmp assumed and variables r and l for left and right
  *  blocks.
  */
-#define GOST_ENCRYPT_ROUND(key1, key2, sbox) \
+#ifndef USE_GCC_ASM_IA32
+# define GOST_ENCRYPT_ROUND(key1, key2, sbox) \
   tmp = (key1) + r; \
   l ^= (sbox)[tmp & 0xff] ^ ((sbox)+256)[(tmp >> 8) & 0xff] ^ \
     ((sbox)+512)[(tmp >> 16) & 0xff] ^ ((sbox)+768)[tmp >> 24]; \
@@ -53,7 +60,7 @@ void gost_cryptopro_init(gost_ctx *ctx)
     ((sbox)+512)[(tmp >> 16) & 0xff] ^ ((sbox)+768)[tmp >> 24];
 
 /* encrypt a block with the given key */
-#define GOST_ENCRYPT(result, i, key, hash, sbox) \
+# define GOST_ENCRYPT(result, i, key, hash, sbox) \
   r = hash[i], l = hash[i + 1]; \
   GOST_ENCRYPT_ROUND(key[0], key[1], sbox) \
   GOST_ENCRYPT_ROUND(key[2], key[3], sbox) \
@@ -73,52 +80,10 @@ void gost_cryptopro_init(gost_ctx *ctx)
   GOST_ENCRYPT_ROUND(key[1], key[0], sbox) \
   result[i] = l, result[i + 1] = r;
 
-/* the following macro rotates a double-word left by n bits */
-#define CIRCULAR_LEFT_SHIFT(dword, n) (((dword) << (n)) ^ ((dword) >> (32-(n))))
+#else /* USE_GCC_ASM_IA32 */
 
-/**
- * The core transformation. Process a 512-bit block.
- *
- * @param hash intermediate message hash
- * @param block the message block to process
- */
-static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
-{
-  unsigned i;
-  unsigned key[8], u[8], v[8], w[8], s[8];
-  unsigned *sbox = (ctx->cryptpro ? (unsigned*)gost_sbox_cryptpro : (unsigned*)gost_sbox);
-  //const unsigned *sbox = (ctx->cryptpro ? (unsigned*)gost_sbox_cryptpro : (unsigned*)gost_sbox);
-
-  /* u := hash, v := <256-bit message block> */
-  memcpy(u, ctx->hash, sizeof(u));
-  memcpy(v, block, sizeof(v));
-
-  /* w := u xor v */
-  w[0] = u[0] ^ v[0], w[1] = u[1] ^ v[1];
-  w[2] = u[2] ^ v[2], w[3] = u[3] ^ v[3];
-  w[4] = u[4] ^ v[4], w[5] = u[5] ^ v[5];
-  w[6] = u[6] ^ v[6], w[7] = u[7] ^ v[7];
-
-  /* calculate keys, encrypt hash and store result to the s[] array */
-  for (i = 0;; i += 2) {
-    /* key generation: key_i := P(w) */
-    key[0] = (w[0] & 0x000000ff) | ((w[2] & 0x000000ff) << 8) | ((w[4] & 0x000000ff) << 16) | ((w[6] & 0x000000ff) << 24);
-    key[1] = ((w[0] & 0x0000ff00) >> 8) | (w[2] & 0x0000ff00) | ((w[4] & 0x0000ff00) << 8)  | ((w[6] & 0x0000ff00) << 16);
-    key[2] = ((w[0] & 0x00ff0000) >> 16) | ((w[2] & 0x00ff0000) >> 8) | (w[4] & 0x00ff0000) | ((w[6] & 0x00ff0000) << 8);
-    key[3] = ((w[0] & 0xff000000) >> 24) | ((w[2] & 0xff000000) >> 16) | ((w[4] & 0xff000000) >> 8) | (w[6] & 0xff000000);
-    key[4] = (w[1] & 0x000000ff) | ((w[3] & 0x000000ff) << 8) | ((w[5] & 0x000000ff) << 16) | ((w[7] & 0x000000ff) << 24);
-    key[5] = ((w[1] & 0x0000ff00) >> 8) | (w[3] & 0x0000ff00) | ((w[5] & 0x0000ff00) << 8)  | ((w[7] & 0x0000ff00) << 16);
-    key[6] = ((w[1] & 0x00ff0000) >> 16) | ((w[3] & 0x00ff0000) >> 8) | (w[5] & 0x00ff0000) | ((w[7] & 0x00ff0000) << 8);
-    key[7] = ((w[1] & 0xff000000) >> 24) | ((w[3] & 0xff000000) >> 16) | ((w[5] & 0xff000000) >> 8) | (w[7] & 0xff000000);
-
-    /* encryption: s_i := E_{key_i} (h_i) */
-#if !(defined(__GNUC__) && defined(CPU_IA32))
-    {
-      unsigned l, r, tmp;
-      GOST_ENCRYPT(s, i, key, ctx->hash, sbox);
-    }
-#else /* if GCC for the x86 platform */
-
+/* a faster x86 version of GOST_ENCRYPT() */
+/* it supposes edi=r, esi=l, edx=sbox ; */
 # define ENC_ROUND_ASMx86(key, reg1, reg2) \
     "movl %" #key ", %%eax\n\t" \
     "addl %%" #reg1 ", %%eax\n\t" \
@@ -138,21 +103,68 @@ static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
   ENC_ASM( 5,  6) ENC_ASM( 7,  8) ENC_ASM( 9, 10) ENC_ASM(11, 12) \
   ENC_ASM( 5,  6) ENC_ASM( 7,  8) ENC_ASM( 9, 10) ENC_ASM(11, 12) \
   ENC_ASM(12, 11) ENC_ASM(10,  9) ENC_ASM( 8,  7) ENC_ASM( 6,  5)
+#endif /* USE_GCC_ASM_IA32 */
 
-  // edi=r, esi=l, edx=sbox ;
-  __asm __volatile(
-    "pushl %%ebx\n\t" // ebx is used for PIC on OpenBSD
-    GOST_ENCRYPT_GCC_ASM_X86() // optimized for x86 Intel Core 2
-    "popl %%ebx\n\t"
-    : "=S" (s[i]), "=D" (s[i+1]) // 0,1: s[i]=esi, s[i+1]=edi
-    : "d" (sbox), "D" (ctx->hash[i]), "S" (ctx->hash[i+1]), // 2,3,4: edx=sbox,edi=r,esi=l
-      "m" (key[0]), "m" (key[1]), "m" (key[2]), "m" (key[3]), // 5, 6, 7, 8
-      "m" (key[4]), "m" (key[5]), "m" (key[6]), "m" (key[7])  // 9,10,11,12
-    : "cc", "eax", "ecx"
-  );
-#endif
 
-    if (i == 0) {
+/* the following macro rotates a double-word left by n bits */
+#define CIRCULAR_LEFT_SHIFT(dword, n) (((dword) << (n)) ^ ((dword) >> (32-(n))))
+
+/**
+ * The core transformation. Process a 512-bit block.
+ *
+ * @param hash intermediate message hash
+ * @param block the message block to process
+ */
+static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
+{
+  unsigned i;
+  unsigned key[8], u[8], v[8], w[8], s[8];
+  unsigned *sbox = (ctx->cryptpro ? (unsigned*)gost_sbox_cryptpro : (unsigned*)gost_sbox);
+
+  /* u := hash, v := <256-bit message block> */
+  memcpy(u, ctx->hash, sizeof(u));
+  memcpy(v, block, sizeof(v));
+
+  /* w := u xor v */
+  w[0] = u[0] ^ v[0], w[1] = u[1] ^ v[1];
+  w[2] = u[2] ^ v[2], w[3] = u[3] ^ v[3];
+  w[4] = u[4] ^ v[4], w[5] = u[5] ^ v[5];
+  w[6] = u[6] ^ v[6], w[7] = u[7] ^ v[7];
+
+  /* calculate keys, encrypt hash and store result to the s[] array */
+  for(i = 0;; i += 2) {
+    /* key generation: key_i := P(w) */
+    key[0] = (w[0] & 0x000000ff) | ((w[2] & 0x000000ff) << 8) | ((w[4] & 0x000000ff) << 16) | ((w[6] & 0x000000ff) << 24);
+    key[1] = ((w[0] & 0x0000ff00) >> 8) | (w[2] & 0x0000ff00) | ((w[4] & 0x0000ff00) << 8)  | ((w[6] & 0x0000ff00) << 16);
+    key[2] = ((w[0] & 0x00ff0000) >> 16) | ((w[2] & 0x00ff0000) >> 8) | (w[4] & 0x00ff0000) | ((w[6] & 0x00ff0000) << 8);
+    key[3] = ((w[0] & 0xff000000) >> 24) | ((w[2] & 0xff000000) >> 16) | ((w[4] & 0xff000000) >> 8) | (w[6] & 0xff000000);
+    key[4] = (w[1] & 0x000000ff) | ((w[3] & 0x000000ff) << 8) | ((w[5] & 0x000000ff) << 16) | ((w[7] & 0x000000ff) << 24);
+    key[5] = ((w[1] & 0x0000ff00) >> 8) | (w[3] & 0x0000ff00) | ((w[5] & 0x0000ff00) << 8)  | ((w[7] & 0x0000ff00) << 16);
+    key[6] = ((w[1] & 0x00ff0000) >> 16) | ((w[3] & 0x00ff0000) >> 8) | (w[5] & 0x00ff0000) | ((w[7] & 0x00ff0000) << 8);
+    key[7] = ((w[1] & 0xff000000) >> 24) | ((w[3] & 0xff000000) >> 16) | ((w[5] & 0xff000000) >> 8) | (w[7] & 0xff000000);
+
+    /* encryption: s_i := E_{key_i} (h_i) */
+#ifndef USE_GCC_ASM_IA32
+    {
+      unsigned l, r, tmp;
+      GOST_ENCRYPT(s, i, key, ctx->hash, sbox);
+    }
+#else /* USE_GCC_ASM_IA32 */
+    __asm __volatile(
+      "movl %%ebx, %13\n\t"
+      GOST_ENCRYPT_GCC_ASM_X86() /* optimized for x86 Intel Core 2 */
+      "movl %13, %%ebx\n\t"
+      : "=S" (s[i]), "=D" (s[i+1]) /* 0,1: s[i]=esi, s[i+1]=edi */
+      : "d" (sbox), "D" (ctx->hash[i]), "S" (ctx->hash[i+1]), /* 2,3,4: edx=sbox,edi=r,esi=l */
+        "m" (key[0]), "m" (key[1]), "m" (key[2]), "m" (key[3]), /* 5, 6, 7, 8 */
+        "m" (key[4]), "m" (key[5]), "m" (key[6]), "m" (key[7]), /* 9,10,11,12 */
+        /* use w[0] to store ebx register, which is needed to be kept for PIC on *BSD */ 
+        /* we avoid push/pop instructions incompatible with gcc -fomit-frame-pointer */
+        "m" (w[0])
+      : "cc", "eax", "ecx");
+#endif /* USE_GCC_ASM_IA32 */
+
+    if(i == 0) {
       /* w:= A(u) ^ A^2(v) */
       w[0] = u[2] ^ v[4], w[1] = u[3] ^ v[5];
       w[2] = u[4] ^ v[6], w[3] = u[5] ^ v[7];
@@ -160,8 +172,8 @@ static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
       w[5] = u[7] ^ (v[1] ^= v[3]);
       w[6] = (u[0] ^= u[2]) ^ (v[2] ^= v[4]);
       w[7] = (u[1] ^= u[3]) ^ (v[3] ^= v[5]);
-    } else if ((i & 2) != 0) {
-      if (i == 6) break;
+    } else if((i & 2) != 0) {
+      if(i == 6) break;
 
       /* w := A^2(u) xor A^4(v) xor C_3; u := A(u) xor C_3 */
       /* C_3=0xff00ffff000000ffff0000ff00ffff0000ff00ff00ff00ffff00ff00ff00ff00 */
@@ -222,35 +234,35 @@ static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
   v[7] = ctx->hash[7] ^ (u[0] & 0xffff0000) ^ (u[0] << 16) ^ (u[1] & 0xffff0000) ^ (u[1] << 16) ^ (u[6] << 16) ^ (u[7] & 0xffff0000) ^ (u[7] >> 16);
 
   /* 61 rounds of LFSR, mixing up hash */
-  ctx->hash[0] = (v[0] & 0xffff0000) ^ (v[0] << 16) ^ (v[0] >> 16) ^
-            (v[1] >> 16) ^ (v[1] & 0xffff0000) ^ (v[2] << 16) ^
-            (v[3] >> 16) ^ (v[4] << 16) ^ (v[5] >> 16) ^ v[5] ^
+  ctx->hash[0] = (v[0] & 0xffff0000) ^ (v[0] << 16) ^ (v[0] >> 16) ^ 
+            (v[1] >> 16) ^ (v[1] & 0xffff0000) ^ (v[2] << 16) ^ 
+            (v[3] >> 16) ^ (v[4] << 16) ^ (v[5] >> 16) ^ v[5] ^ 
             (v[6] >> 16) ^ (v[7] << 16) ^ (v[7] >> 16) ^ (v[7] & 0xffff);
-  ctx->hash[1] = (v[0] << 16) ^ (v[0] >> 16) ^ (v[0] & 0xffff0000) ^
-            (v[1] & 0xffff) ^ v[2] ^ (v[2] >> 16) ^ (v[3] << 16) ^
-            (v[4] >> 16) ^ (v[5] << 16) ^ (v[6] << 16) ^ v[6] ^
+  ctx->hash[1] = (v[0] << 16) ^ (v[0] >> 16) ^ (v[0] & 0xffff0000) ^ 
+            (v[1] & 0xffff) ^ v[2] ^ (v[2] >> 16) ^ (v[3] << 16) ^ 
+            (v[4] >> 16) ^ (v[5] << 16) ^ (v[6] << 16) ^ v[6] ^ 
             (v[7] & 0xffff0000) ^ (v[7] >> 16);
-  ctx->hash[2] = (v[0] & 0xffff) ^ (v[0] << 16) ^ (v[1] << 16) ^
-            (v[1] >> 16) ^ (v[1] & 0xffff0000) ^ (v[2] << 16) ^ (v[3] >> 16) ^
-             v[3] ^ (v[4] << 16) ^ (v[5] >> 16) ^ v[6] ^ (v[6] >> 16) ^
+  ctx->hash[2] = (v[0] & 0xffff) ^ (v[0] << 16) ^ (v[1] << 16) ^ 
+            (v[1] >> 16) ^ (v[1] & 0xffff0000) ^ (v[2] << 16) ^ (v[3] >> 16) ^ 
+             v[3] ^ (v[4] << 16) ^ (v[5] >> 16) ^ v[6] ^ (v[6] >> 16) ^ 
             (v[7] & 0xffff) ^ (v[7] << 16) ^ (v[7] >> 16);
-  ctx->hash[3] = (v[0] << 16) ^ (v[0] >> 16) ^ (v[0] & 0xffff0000) ^
-            (v[1] & 0xffff0000) ^ (v[1] >> 16) ^ (v[2] << 16) ^
-            (v[2] >> 16) ^ v[2] ^ (v[3] << 16) ^ (v[4] >> 16) ^ v[4] ^
+  ctx->hash[3] = (v[0] << 16) ^ (v[0] >> 16) ^ (v[0] & 0xffff0000) ^ 
+            (v[1] & 0xffff0000) ^ (v[1] >> 16) ^ (v[2] << 16) ^ 
+            (v[2] >> 16) ^ v[2] ^ (v[3] << 16) ^ (v[4] >> 16) ^ v[4] ^ 
             (v[5] << 16) ^ (v[6] << 16) ^ (v[7] & 0xffff) ^ (v[7] >> 16);
-  ctx->hash[4] = (v[0] >> 16) ^ (v[1] << 16) ^ v[1] ^ (v[2] >> 16) ^ v[2] ^
-            (v[3] << 16) ^ (v[3] >> 16) ^ v[3] ^ (v[4] << 16) ^
+  ctx->hash[4] = (v[0] >> 16) ^ (v[1] << 16) ^ v[1] ^ (v[2] >> 16) ^ v[2] ^ 
+            (v[3] << 16) ^ (v[3] >> 16) ^ v[3] ^ (v[4] << 16) ^ 
             (v[5] >> 16) ^ v[5] ^ (v[6] << 16) ^ (v[6] >> 16) ^ (v[7] << 16);
-  ctx->hash[5] = (v[0] << 16) ^ (v[0] & 0xffff0000) ^ (v[1] << 16) ^
-            (v[1] >> 16) ^ (v[1] & 0xffff0000) ^ (v[2] << 16) ^ v[2] ^
-            (v[3] >> 16) ^ v[3] ^ (v[4] << 16) ^ (v[4] >> 16) ^ v[4] ^
-            (v[5] << 16) ^ (v[6] << 16) ^ (v[6] >> 16) ^ v[6] ^
+  ctx->hash[5] = (v[0] << 16) ^ (v[0] & 0xffff0000) ^ (v[1] << 16) ^ 
+            (v[1] >> 16) ^ (v[1] & 0xffff0000) ^ (v[2] << 16) ^ v[2] ^ 
+            (v[3] >> 16) ^ v[3] ^ (v[4] << 16) ^ (v[4] >> 16) ^ v[4] ^ 
+            (v[5] << 16) ^ (v[6] << 16) ^ (v[6] >> 16) ^ v[6] ^ 
             (v[7] << 16) ^ (v[7] >> 16) ^ (v[7] & 0xffff0000);
-  ctx->hash[6] = v[0] ^ v[2] ^ (v[2] >> 16) ^ v[3] ^ (v[3] << 16) ^ v[4] ^
-            (v[4] >> 16) ^ (v[5] << 16) ^ (v[5] >> 16) ^ v[5] ^
+  ctx->hash[6] = v[0] ^ v[2] ^ (v[2] >> 16) ^ v[3] ^ (v[3] << 16) ^ v[4] ^ 
+            (v[4] >> 16) ^ (v[5] << 16) ^ (v[5] >> 16) ^ v[5] ^ 
             (v[6] << 16) ^ (v[6] >> 16) ^ v[6] ^ (v[7] << 16) ^ v[7];
-  ctx->hash[7] = v[0] ^ (v[0] >> 16) ^ (v[1] << 16) ^ (v[1] >> 16) ^
-            (v[2] << 16) ^ (v[3] >> 16) ^ v[3] ^ (v[4] << 16) ^ v[4] ^
+  ctx->hash[7] = v[0] ^ (v[0] >> 16) ^ (v[1] << 16) ^ (v[1] >> 16) ^ 
+            (v[2] << 16) ^ (v[3] >> 16) ^ v[3] ^ (v[4] << 16) ^ v[4] ^ 
             (v[5] >> 16) ^ v[5] ^ (v[6] << 16) ^ (v[6] >> 16) ^ (v[7] << 16) ^ v[7];
 }
 
@@ -258,7 +270,7 @@ static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
  * This function calculates hash value by 256-bit blocks.
  * It updates 256-bit check sum as follows:
  *    *(uint256_t)(ctx->sum) += *(uint256_t*)block;
- * and then updates intermediate hash value ctx->hash
+ * and then updates intermediate hash value ctx->hash 
  * by calling gost_block_compress().
  *
  * @param ctx algorithm context
@@ -267,28 +279,16 @@ static void gost_block_compress(gost_ctx *ctx, const unsigned* block)
 static void gost_compute_sum_and_hash(gost_ctx * ctx, const unsigned* block)
 {
 #ifdef CPU_BIG_ENDIAN
-  unsigned block_me[8]; /* tmp buffer for little endian number */
-# define GET_BLOCK_ME(i) (block_me[i] = le2me_32(block[i]))
+  unsigned block_le[8]; /* tmp buffer for little endian number */
+# define LOAD_BLOCK_LE(i) (block_le[i] = le2me_32(block[i]))
 #else
-# define block_me block
-# define GET_BLOCK_ME(i)
+# define block_le block
+# define LOAD_BLOCK_LE(i)
 #endif
 
   /* This optimization doesn't improve speed much,
    * and saves too little memory, but it was fun to write! =)  */
-#if defined(__GNUC__) && defined(CPU_X64)
-  const uint64_t* block64 = (const uint64_t*)block;
-  uint64_t* sum64 = (uint64_t*)ctx->sum;
-  __asm __volatile(
-    "addq %4, %0\n\t"
-    "adcq %5, %1\n\t"
-    "adcq %6, %2\n\t"
-    "adcq %7, %3\n\t"
-    : "+mr" (sum64[0]), "+mr" (sum64[1]), "+mr" (sum64[2]), "+mr" (sum64[3])
-    : "r" (block64[0]), "r" (block64[1]), "r" (block64[2]), "r" (block64[3])
-    : "cc"
-  );
-#elif defined(__GNUC__) && defined(CPU_IA32)
+#ifdef USE_GCC_ASM_IA32
   __asm __volatile(
     "addl %0, (%1)\n\t"
     "movl 4(%2), %0\n\t"
@@ -308,22 +308,33 @@ static void gost_compute_sum_and_hash(gost_ctx * ctx, const unsigned* block)
     : : "r" (block[0]), "r" (ctx->sum), "r" (block)
     : "0", "memory", "cc"
   );
-#else
+#elif defined(USE_GCC_ASM_X64)
+  const uint64_t* block64 = (const uint64_t*)block;
+  uint64_t* sum64 = (uint64_t*)ctx->sum;
+  __asm __volatile(
+    "addq %4, %0\n\t"
+    "adcq %5, %1\n\t"
+    "adcq %6, %2\n\t"
+    "adcq %7, %3\n\t"
+    : "+mr" (sum64[0]), "+mr" (sum64[1]), "+mr" (sum64[2]), "+mr" (sum64[3])
+    : "r" (block64[0]), "r" (block64[1]), "r" (block64[2]), "r" (block64[3])
+    : "cc"
+  );
+#else /* USE_GCC_ASM_IA32 */
 
-  unsigned i;
-  unsigned carry = 0;
+  unsigned i, carry = 0;
 
   /* compute the 256-bit sum */
-  for (i = 0; i < 8; i++) {
+  for(i = 0; i < 8; i++) {
     const unsigned old = ctx->sum[i];
-    GET_BLOCK_ME(i);
-    ctx->sum[i] += block_me[i] + carry;
-    carry = (ctx->sum[i] < old || ctx->sum[i] < block_me[i] ? 1 : 0);
+    LOAD_BLOCK_LE(i);
+    ctx->sum[i] += block_le[i] + carry;
+    carry = (ctx->sum[i] < old || ctx->sum[i] < block_le[i] ? 1 : 0);
   }
-#endif
+#endif /* USE_GCC_ASM_IA32 */
 
   /* update message hash */
-  gost_block_compress(ctx, block_me);
+  gost_block_compress(ctx, block_le);
 }
 
 /**
@@ -336,29 +347,28 @@ static void gost_compute_sum_and_hash(gost_ctx * ctx, const unsigned* block)
  */
 void gost_update(gost_ctx *ctx, const unsigned char* msg, size_t size)
 {
-  if (!size) return;
   unsigned index = (unsigned)ctx->length & 31;
   ctx->length += size;
-
+  
   /* fill partial block */
-  if (index) {
+  if(index) {
     unsigned left = gost_block_size - index;
     memcpy(ctx->message + index, msg, (size < left ? size : left));
-    if (size < left) return;
+    if(size < left) return;
 
     /* process partial block */
     gost_compute_sum_and_hash(ctx, (unsigned*)ctx->message);
     msg += left;
     size -= left;
   }
-  while (size >= gost_block_size) {
+  while(size >= gost_block_size) {
     unsigned* aligned_message_block;
 #if (defined(__GNUC__) && defined(CPU_X64))
     if( IS_ALIGNED_64(msg) ) {
 #else
     if( IS_ALIGNED_32(msg) ) {
 #endif
-      /* the most common case is processing of an already aligned message
+      /* the most common case is processing of an already aligned message 
          on little-endian CPU without copying it */
       aligned_message_block = (unsigned*)msg;
     } else {
@@ -388,7 +398,7 @@ void gost_final(gost_ctx *ctx, unsigned char result[32])
   unsigned* msg32 = (unsigned*)ctx->message;
 
   /* pad the last block with zeroes and hash it */
-  if (index > 0) {
+  if(index > 0) {
     memset(ctx->message + index, 0, 32 - index);
     gost_compute_sum_and_hash(ctx, msg32);
   }
@@ -420,7 +430,7 @@ static void fill_gost_sbox(unsigned out[4][256], const unsigned char src[8][16])
     bx = (unsigned)src[3][a] << 23;
     cx = CIRCULAR_LEFT_SHIFT((unsigned)src[5][a], 31);
     dx = (unsigned)src[7][a] << 7;
-
+      
     for(b = 0; b < 16; b++, i++) {
       out[0][i] = ax | ((unsigned)src[0][b] << 11);
       out[1][i] = bx | ((unsigned)src[2][b] << 19);
@@ -428,15 +438,13 @@ static void fill_gost_sbox(unsigned out[4][256], const unsigned char src[8][16])
       out[3][i] = dx | ((unsigned)src[6][b] << 3);
     }
   }
-
-  //for(i=0; i<1024; i++) printf("0x%x%s", out[i/256][i&255], (255!=(i&255) ? ", " : "\n"));
 }
 
 /* initialize the lookup tables */
 void gost_init_table(void)
 {
   /* Test parameters set. Eight 4-bit S-Boxes defined by GOST R 34.10-94
-   * standart for testing the hash function.
+   * standart for testing the hash function. 
    * Also given by RFC 4357 section 11.2 */
   static const unsigned char sbox[8][16] = {
     {  4, 10,  9,  2, 13,  8,  0, 14,  6, 11,  1, 12,  7, 15,  5,  3 },
@@ -446,7 +454,7 @@ void gost_init_table(void)
     {  6, 12,  7,  1,  5, 15, 13,  8,  4, 10,  9, 14,  0,  3, 11,  2 },
     {  4, 11, 10,  0,  7,  2,  1, 13,  3,  6,  8,  5,  9, 12, 15, 14 },
     { 13, 11,  4,  1,  3, 15,  5,  9,  0, 10, 14,  7,  6,  8,  2, 12 },
-    {  1, 15, 13,  0,  5,  7, 10,  4,  9,  2,  3, 14,  6, 11,  8, 12 }
+    {  1, 15, 13,  0,  5,  7, 10,  4,  9,  2,  3, 14,  6, 11,  8, 12 }  
   };
 
   /* Parameter set recommended by RFC 4357.
@@ -578,68 +586,68 @@ unsigned gost_sbox[4][256] = {
     0x1D80000
   }, {
     0x30000002, 0x60000002, 0x38000002, 0x8000002,
-    0x28000002, 0x78000002, 0x68000002, 0x40000002,
-    0x20000002, 0x50000002, 0x48000002, 0x70000002,
-    0x2,        0x18000002, 0x58000002, 0x10000002,
+    0x28000002, 0x78000002, 0x68000002, 0x40000002, 
+    0x20000002, 0x50000002, 0x48000002, 0x70000002, 
+    0x2,        0x18000002, 0x58000002, 0x10000002, 
     0xB0000005, 0xE0000005, 0xB8000005, 0x88000005,
     0xA8000005, 0xF8000005, 0xE8000005, 0xC0000005,
-    0xA0000005, 0xD0000005, 0xC8000005, 0xF0000005,
-    0x80000005, 0x98000005, 0xD8000005, 0x90000005,
-    0x30000005, 0x60000005, 0x38000005, 0x8000005,
+    0xA0000005, 0xD0000005, 0xC8000005, 0xF0000005, 
+    0x80000005, 0x98000005, 0xD8000005, 0x90000005, 
+    0x30000005, 0x60000005, 0x38000005, 0x8000005, 
     0x28000005, 0x78000005, 0x68000005, 0x40000005,
-    0x20000005, 0x50000005, 0x48000005, 0x70000005,
-    0x5,        0x18000005, 0x58000005, 0x10000005,
-    0x30000000, 0x60000000, 0x38000000, 0x8000000,
-    0x28000000, 0x78000000, 0x68000000, 0x40000000,
+    0x20000005, 0x50000005, 0x48000005, 0x70000005, 
+    0x5,        0x18000005, 0x58000005, 0x10000005, 
+    0x30000000, 0x60000000, 0x38000000, 0x8000000, 
+    0x28000000, 0x78000000, 0x68000000, 0x40000000, 
     0x20000000, 0x50000000, 0x48000000, 0x70000000,
-    0x0,        0x18000000, 0x58000000, 0x10000000,
-    0xB0000003, 0xE0000003, 0xB8000003, 0x88000003,
-    0xA8000003, 0xF8000003, 0xE8000003, 0xC0000003,
-    0xA0000003, 0xD0000003, 0xC8000003, 0xF0000003,
+    0x0,        0x18000000, 0x58000000, 0x10000000, 
+    0xB0000003, 0xE0000003, 0xB8000003, 0x88000003, 
+    0xA8000003, 0xF8000003, 0xE8000003, 0xC0000003, 
+    0xA0000003, 0xD0000003, 0xC8000003, 0xF0000003, 
     0x80000003, 0x98000003, 0xD8000003, 0x90000003,
     0x30000001, 0x60000001, 0x38000001, 0x8000001,
-    0x28000001, 0x78000001, 0x68000001, 0x40000001,
-    0x20000001, 0x50000001, 0x48000001, 0x70000001,
-    0x1,        0x18000001, 0x58000001, 0x10000001,
+    0x28000001, 0x78000001, 0x68000001, 0x40000001, 
+    0x20000001, 0x50000001, 0x48000001, 0x70000001, 
+    0x1,        0x18000001, 0x58000001, 0x10000001, 
     0xB0000000, 0xE0000000, 0xB8000000, 0x88000000,
     0xA8000000, 0xF8000000, 0xE8000000, 0xC0000000,
-    0xA0000000, 0xD0000000, 0xC8000000, 0xF0000000,
-    0x80000000, 0x98000000, 0xD8000000, 0x90000000,
-    0xB0000006, 0xE0000006, 0xB8000006, 0x88000006,
+    0xA0000000, 0xD0000000, 0xC8000000, 0xF0000000, 
+    0x80000000, 0x98000000, 0xD8000000, 0x90000000, 
+    0xB0000006, 0xE0000006, 0xB8000006, 0x88000006, 
     0xA8000006, 0xF8000006, 0xE8000006, 0xC0000006,
     0xA0000006, 0xD0000006, 0xC8000006, 0xF0000006,
-    0x80000006, 0x98000006, 0xD8000006, 0x90000006,
-    0xB0000001, 0xE0000001, 0xB8000001, 0x88000001,
-    0xA8000001, 0xF8000001, 0xE8000001, 0xC0000001,
+    0x80000006, 0x98000006, 0xD8000006, 0x90000006, 
+    0xB0000001, 0xE0000001, 0xB8000001, 0x88000001, 
+    0xA8000001, 0xF8000001, 0xE8000001, 0xC0000001, 
     0xA0000001, 0xD0000001, 0xC8000001, 0xF0000001,
     0x80000001, 0x98000001, 0xD8000001, 0x90000001,
-    0x30000003, 0x60000003, 0x38000003, 0x8000003,
-    0x28000003, 0x78000003, 0x68000003, 0x40000003,
-    0x20000003, 0x50000003, 0x48000003, 0x70000003,
+    0x30000003, 0x60000003, 0x38000003, 0x8000003, 
+    0x28000003, 0x78000003, 0x68000003, 0x40000003, 
+    0x20000003, 0x50000003, 0x48000003, 0x70000003, 
     0x3,        0x18000003, 0x58000003, 0x10000003,
     0x30000004, 0x60000004, 0x38000004, 0x8000004,
-    0x28000004, 0x78000004, 0x68000004, 0x40000004,
-    0x20000004, 0x50000004, 0x48000004, 0x70000004,
-    0x4,        0x18000004, 0x58000004, 0x10000004,
+    0x28000004, 0x78000004, 0x68000004, 0x40000004, 
+    0x20000004, 0x50000004, 0x48000004, 0x70000004, 
+    0x4,        0x18000004, 0x58000004, 0x10000004, 
     0xB0000002, 0xE0000002, 0xB8000002, 0x88000002,
     0xA8000002, 0xF8000002, 0xE8000002, 0xC0000002,
-    0xA0000002, 0xD0000002, 0xC8000002, 0xF0000002,
-    0x80000002, 0x98000002, 0xD8000002, 0x90000002,
-    0xB0000004, 0xE0000004, 0xB8000004, 0x88000004,
+    0xA0000002, 0xD0000002, 0xC8000002, 0xF0000002, 
+    0x80000002, 0x98000002, 0xD8000002, 0x90000002, 
+    0xB0000004, 0xE0000004, 0xB8000004, 0x88000004, 
     0xA8000004, 0xF8000004, 0xE8000004, 0xC0000004,
     0xA0000004, 0xD0000004, 0xC8000004, 0xF0000004,
-    0x80000004, 0x98000004, 0xD8000004, 0x90000004,
-    0x30000006, 0x60000006, 0x38000006, 0x8000006,
-    0x28000006, 0x78000006, 0x68000006, 0x40000006,
+    0x80000004, 0x98000004, 0xD8000004, 0x90000004, 
+    0x30000006, 0x60000006, 0x38000006, 0x8000006, 
+    0x28000006, 0x78000006, 0x68000006, 0x40000006, 
     0x20000006, 0x50000006, 0x48000006, 0x70000006,
-    0x6,        0x18000006, 0x58000006, 0x10000006,
-    0xB0000007, 0xE0000007, 0xB8000007, 0x88000007,
-    0xA8000007, 0xF8000007, 0xE8000007, 0xC0000007,
-    0xA0000007, 0xD0000007, 0xC8000007, 0xF0000007,
+    0x6,        0x18000006, 0x58000006, 0x10000006, 
+    0xB0000007, 0xE0000007, 0xB8000007, 0x88000007, 
+    0xA8000007, 0xF8000007, 0xE8000007, 0xC0000007, 
+    0xA0000007, 0xD0000007, 0xC8000007, 0xF0000007, 
     0x80000007, 0x98000007, 0xD8000007, 0x90000007,
     0x30000007, 0x60000007, 0x38000007, 0x8000007,
-    0x28000007, 0x78000007, 0x68000007, 0x40000007,
-    0x20000007, 0x50000007, 0x48000007, 0x70000007,
+    0x28000007, 0x78000007, 0x68000007, 0x40000007, 
+    0x20000007, 0x50000007, 0x48000007, 0x70000007, 
     0x7,        0x18000007, 0x58000007, 0x10000007
   }, {
     0xE8,  0xD8,  0xA0,  0x88,  0x98,  0xF8,  0xA8,  0xC8,  0x80,  0xD0,

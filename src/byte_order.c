@@ -71,7 +71,7 @@ unsigned get_ctz(unsigned x)
  */
 void u32_swap_copy(void* to, const void* from, size_t length)
 {
-  // if all pointers and length are 32-bits aligned
+  /* if all pointers and length are 32-bits aligned */
   if( 0 == (( (int)((char*)to - (char*)0) | ((char*)from - (char*)0) | length ) & 3) ) {
     /* copy memory as dwords */
     const unsigned* src = (const unsigned*)from; 
@@ -98,7 +98,7 @@ void u32_swap_copy(void* to, const void* from, size_t length)
  */
 void u64_swap_copy(void* to, int index, const void* from, size_t length)
 {
-  // if all pointers and length are 64-bits aligned
+  /* if all pointers and length are 64-bits aligned */
   if( 0 == (( (int)((char*)to - (char*)0) | ((char*)from - (char*)0) | index | length ) & 7) ) {
     /* copy aligned memory block as 64-bit integers */
     const uint64_t* src = (const uint64_t*)from; 
@@ -124,9 +124,3 @@ void u32_memswap(unsigned *arr, int length)
     *arr = bswap_32(*arr);
   }
 }
-
-/* detect if cpu architecture is little endian */
-/*int is_little_endian() {
-    short tmp = 0x0001;
-    return  (0 != *(char*)&tmp);
-}*/
