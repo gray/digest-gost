@@ -3,6 +3,7 @@ GOST.bs
 GOST.c
 GOST.o
 MANIFEST.bak
+MYMETA.*
 Makefile
 Makefile.old
 blib/
