@@ -138,7 +138,7 @@ PPCODE:
     }
     XSRETURN(1);
 
-SV *
+void
 digest (self)
     Digest::GOST self
 ALIAS:
