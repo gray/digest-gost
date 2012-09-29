@@ -4,17 +4,13 @@ use strict;
 use warnings;
 use parent qw(Exporter Digest::base);
 
+use XSLoader;
+
 our $VERSION = '0.05';
+our $XS_VERSION = $VERSION;
 $VERSION = eval $VERSION;
 
-eval {
-    require XSLoader;
-    XSLoader::load(__PACKAGE__, $VERSION);
-    1;
-} or do {
-    require DynaLoader;
-    DynaLoader::bootstrap(__PACKAGE__, $VERSION);
-};
+XSLoader::load(__PACKAGE__, $XS_VERSION);
 
 our @EXPORT_OK = qw(gost gost_hex gost_base64);
 

@@ -8,9 +8,10 @@ my %conf = (
     LICENSE       => 'perl',
     VERSION_FROM  => 'lib/Digest/GOST.pm',
     ABSTRACT_FROM => 'lib/Digest/GOST.pm',
-    PREREQ_PM     => {
-        Digest         => 0,
-        parent         => 0,
+    PREREQ_PM => {
+        Digest   => 0,
+        XSLoader => 0,
+        parent   => 0,
     },
     BUILD_REQUIRES => { 'Test::More' => 0.82, },
     DEFINE         => '-DGENERATE_GOST_LOOKUP_TABLE',
