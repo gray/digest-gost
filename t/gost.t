@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 27;
+use Test::More;
 use Digest::GOST qw(gost gost_hex);
 
 my @tests = <DATA>;
@@ -20,6 +20,8 @@ for my $test (@tests) {
     is(gost_hex($msg), $digest, "gost_hex: $show_msg");
     ok(gost($msg) eq pack('H*', $digest), "gost: $show_msg");
 }
+
+done_testing;
 
 __DATA__
 |ce85b99cc46752fffee35cab9a7b0278abb4c2d2055cff685af4912c49490f8d

@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 5;
+use Test::More;
 use Digest::GOST;
 
 new_ok('Digest::GOST', [], "new");
@@ -22,3 +22,5 @@ is(
 $d1->add('foobar');
 my $d2 = $d1->clone;
 is($d1->hexdigest, $d2->hexdigest, 'clone');
+
+done_testing;
