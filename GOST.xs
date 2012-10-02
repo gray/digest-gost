@@ -88,12 +88,12 @@ PREINIT:
     unsigned char result[32];
     STRLEN len;
 CODE:
-    gost_init(&ctx);
+    rhash_gost_init(&ctx);
     for (i = 0; i < items; i++) {
         data = (unsigned char *)(SvPV(ST(i), len));
-        gost_update(&ctx, data, len);
+        rhash_gost_update(&ctx, data, len);
     }
-    gost_final(&ctx, result);
+    rhash_gost_final(&ctx, result);
     ST(0) = make_mortal_sv(aTHX_ result, 32, ix);
     XSRETURN(1);
 
@@ -102,7 +102,7 @@ new (class)
     SV *class
 CODE:
     Newx(RETVAL, 1, gost_ctx);
-    gost_init(RETVAL);
+    rhash_gost_init(RETVAL);
 OUTPUT:
     RETVAL
 
@@ -119,7 +119,7 @@ void
 reset (self)
     Digest::GOST self
 PPCODE:
-    gost_init(self);
+    rhash_gost_init(self);
     XSRETURN(1);
 
 void
@@ -132,7 +132,7 @@ PREINIT:
 PPCODE:
     for (i = 1; i < items; i++) {
         data = (unsigned char *)(SvPV(ST(i), len));
-        gost_update(self, data, len);
+        rhash_gost_update(self, data, len);
     }
     XSRETURN(1);
 
@@ -146,8 +146,8 @@ ALIAS:
 PREINIT:
     unsigned char result[32];
 CODE:
-    gost_final(self, result);
-    gost_init(self);
+    rhash_gost_final(self, result);
+    rhash_gost_init(self);
     ST(0) = make_mortal_sv(aTHX_ result, 32, ix);
     XSRETURN(1);
 
@@ -172,12 +172,12 @@ PREINIT:
     unsigned char result[32];
     STRLEN len;
 CODE:
-    gost_cryptopro_init(&ctx);
+    rhash_gost_cryptopro_init(&ctx);
     for (i = 0; i < items; i++) {
         data = (unsigned char *)(SvPV(ST(i), len));
-        gost_update(&ctx, data, len);
+        rhash_gost_update(&ctx, data, len);
     }
-    gost_final(&ctx, result);
+    rhash_gost_final(&ctx, result);
     ST(0) = make_mortal_sv(aTHX_ result, 32, ix);
     XSRETURN(1);
 
@@ -186,7 +186,7 @@ new (class)
     SV *class
 CODE:
     Newx(RETVAL, 1, gost_ctx);
-    gost_cryptopro_init(RETVAL);
+    rhash_gost_cryptopro_init(RETVAL);
 OUTPUT:
     RETVAL
 
@@ -194,7 +194,7 @@ void
 reset (self)
     Digest::GOST::CryptoPro self
 PPCODE:
-    gost_cryptopro_init(self);
+    rhash_gost_cryptopro_init(self);
     XSRETURN(1);
 
 void
@@ -207,7 +207,7 @@ ALIAS:
 PREINIT:
     unsigned char result[32];
 CODE:
-    gost_final(self, result);
-    gost_cryptopro_init(self);
+    rhash_gost_final(self, result);
+    rhash_gost_cryptopro_init(self);
     ST(0) = make_mortal_sv(aTHX_ result, 32, ix);
     XSRETURN(1);
