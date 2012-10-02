@@ -51,6 +51,9 @@ message digest algorithm.
 
 This interface follows the conventions set forth by the C<Digest> module.
 
+This module uses the default "test" parameters. To use the CryptoPro
+parameters, use C<Digest::GOST::CryptoPro>.
+
 =head1 FUNCTIONS
 
 The following functions are provided by the C<Digest::GOST> module. None of
@@ -78,11 +81,13 @@ described by C<Digest>.
 
 =head1 SEE ALSO
 
+L<Digest::GOST::CryptoPro>
+
 L<Digest>
 
 L<Task::Digest>
 
-L<http://en.wikipedia.org/wiki/GOST_%28hash_function%29>
+L<http://en.wikipedia.org/wiki/GOST_(hash_function)>
 
 =head1 REQUESTS AND BUGS
 

@@ -2,6 +2,7 @@ Changes
 ex/benchmark.pl
 GOST.xs
 lib/Digest/GOST.pm
+lib/Digest/GOST/CryptoPro.pm
 Makefile.PL
 MANIFEST			This list of files
 ppport.h
@@ -15,7 +16,8 @@ src/stdint.h
 src/unistd.h
 t/00_load.t
 t/01_new.t
-t/gost.t
+t/gost_cryptopro.t
+t/gost_test.t
 typemap
 xt/kwalitee.t
 xt/leaktrace.t
