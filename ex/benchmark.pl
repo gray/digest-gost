@@ -10,7 +10,7 @@ use List::Util qw(max);
 use Crypt::RIPEMD160      ();
 use Digest::BLAKE         ();
 use Digest::BMW           ();
-use Digest::CubeHash      ();
+use Digest::CubeHash::XS  ();
 use Digest::ECHO          ();
 use Digest::Fugue         ();
 use Digest::GOST          ();
@@ -51,10 +51,10 @@ my %digests = (
     bmw_256      => sub { Digest::BMW::bmw_256($data) },
     bmw_384      => sub { Digest::BMW::bmw_384($data) },
     bmw_512      => sub { Digest::BMW::bmw_512($data) },
-    cubehash_224 => sub { Digest::CubeHash::cubehash_224($data) },
-    cubehash_256 => sub { Digest::CubeHash::cubehash_256($data) },
-    cubehash_384 => sub { Digest::CubeHash::cubehash_384($data) },
-    cubehash_512 => sub { Digest::CubeHash::cubehash_512($data) },
+    cubehash_224 => sub { Digest::CubeHash::XS::cubehash_224($data) },
+    cubehash_256 => sub { Digest::CubeHash::XS::cubehash_256($data) },
+    cubehash_384 => sub { Digest::CubeHash::XS::cubehash_384($data) },
+    cubehash_512 => sub { Digest::CubeHash::XS::cubehash_512($data) },
     echo_224     => sub { Digest::ECHO::echo_224($data) },
     echo_256     => sub { Digest::ECHO::echo_256($data) },
     echo_384     => sub { Digest::ECHO::echo_384($data) },
