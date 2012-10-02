@@ -14,7 +14,6 @@ my %conf = (
         parent   => 0,
     },
     BUILD_REQUIRES => { 'Test::More' => 0.82, },
-    DEFINE         => '-DGENERATE_GOST_LOOKUP_TABLE',
     META_MERGE     => {
         resources => {
             repository => 'http://github.com/gray/digest-gost',

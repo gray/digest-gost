@@ -73,9 +73,6 @@ typedef gost_ctx *Digest__GOST__CryptoPro;
 
 MODULE = Digest::GOST    PACKAGE = Digest::GOST
 
-BOOT:
-    gost_init_table();
-
 PROTOTYPES: ENABLE
 
 void
