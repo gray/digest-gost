@@ -1,18 +1,22 @@
 use strict;
 use warnings;
 use Digest::GOST;
+use Digest::GOST::CryptoPro;
 use Test::More;
 
 eval "use Test::LeakTrace; 1" or do {
     plan skip_all => 'Test::LeakTrace is not installed.';
 };
-plan tests => 1;
 
-my $try = sub {
-    my $gost = Digest::GOST->new;
-    $gost->add('foobar');
-};
+for my $m (qw(Digest::GOST Digest::GOST::CryptoPro)) {
+    my $try = sub {
+        my $gost = $m->new;
+        $gost->add('foobar');
+    };
 
-$try->();
+    $try->();
 
-is(leaked_count($try), 0, 'leaks');
+    is(leaked_count($try), 0, 'leaks');
+}
+
+done_testing;
