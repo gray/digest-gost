@@ -8,17 +8,18 @@ my %conf = (
     LICENSE       => 'perl',
     VERSION_FROM  => 'lib/Digest/GOST.pm',
     ABSTRACT_FROM => 'lib/Digest/GOST.pm',
-    PREREQ_PM => {
+    PREREQ_PM     => {
         Digest   => 0,
         XSLoader => 0,
         parent   => 0,
     },
     BUILD_REQUIRES => { 'Test::More' => 0.82, },
     META_MERGE     => {
-        resources => {
-            repository => 'http://github.com/gray/digest-gost',
-        },
+        resources => { repository => 'http://github.com/gray/digest-gost' },
     },
+
+    INC => '-Isrc/win32' x !!($^O eq 'MSWin32'),
+
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES    => 'Digest-GOST-*' },
 );
