@@ -1,5 +1,8 @@
 Revision history for Digest-GOST
 
+0.06  Wed Oct  3 17:40:24 UTC 2012
+    - Added support for the CryptoPro parameters. (RT #79846)
+
 0.05  Tue Dec 14 19:18:47 UTC 2010
     - Asm fix for Solaris. (Aleksey Kravchenko)
 
