@@ -6,6 +6,7 @@
 #include "ppport.h"
 
 #include "src/gost.c"
+#include "src/byte_order.c"
 
 static int
 hex_encode (char *dest, const unsigned char *src, int len) {
