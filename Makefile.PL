@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
+use Config;
 
 my %conf = (
     NAME          => 'Digest::GOST',
@@ -18,7 +19,7 @@ my %conf = (
         resources => { repository => 'http://github.com/gray/digest-gost' },
     },
 
-    INC => '-Isrc/win32' x !!($^O eq 'MSWin32'),
+    INC => '-Isrc/win32' x !!($^O eq 'MSWin32' && $Config{cc} eq 'cl'),
 
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES    => 'Digest-GOST-*' },
